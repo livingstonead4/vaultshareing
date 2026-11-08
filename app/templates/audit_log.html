@@ -1,0 +1,129 @@
+<!DOCTYPE html><html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VaultShare Audit Log</title><style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f2f5fa;
+        margin: 0;
+    }
+
+    header {
+        background: #17365d;
+        color: white;
+        padding: 20px;
+        text-align: center;
+    }
+
+    .container {
+        max-width: 900px;
+        margin: 30px auto;
+        padding: 15px;
+    }
+
+    .card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+        overflow-x: auto;
+    }
+
+    h2 {
+        color: #17365d;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 550px;
+    }
+
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+
+    th {
+        background: #17365d;
+        color: white;
+    }
+
+    tr:hover {
+        background: #f2f5fa;
+    }
+
+    .button {
+        display: inline-block;
+        background: #17365d;
+        color: white;
+        padding: 12px 18px;
+        border-radius: 6px;
+        text-decoration: none;
+        margin-top: 20px;
+    }
+
+    .empty {
+        color: #666;
+        padding: 15px 0;
+    }
+</style>
+
+</head><body><header>
+    <h1>VaultShare</h1>
+    <p>Document Activity Audit Log</p>
+</header><div class="container"><div class="card">
+
+    <h2>My Audit History</h2>
+
+    <p>Records of your document activities.</p>
+
+    {% if logs %}
+
+    <table>
+        <thead>
+            <tr>
+                <th>Activity</th>
+                <th>Document ID</th>
+                <th>Details</th>
+                <th>Date and Time</th>
+            </tr>
+        </thead>
+
+        <tbody>
+
+            {% for log in logs %}
+
+            <tr>
+                <td>{{ log.action }}</td>
+
+                <td>
+                    {{ log.document_id if log.document_id else "N/A" }}
+                </td>
+
+                <td>{{ log.details or "N/A" }}</td>
+
+                <td>{{ log.created_at }}</td>
+            </tr>
+
+            {% endfor %}
+
+        </tbody>
+    </table>
+
+    {% else %}
+
+    <p class="empty">No activity records found yet.</p>
+
+    {% endif %}
+
+    <a class="button" href="{{ url_for('dashboard') }}">
+        Back to Dashboard
+    </a>
+
+</div>
+
+</div></body>
+</html>
