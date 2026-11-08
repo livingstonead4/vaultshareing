@@ -2,7 +2,9 @@ import os
 import hashlib
 import hmac
 import base64
+
 from io import BytesIO
+from datetime import datetime, time
 
 from flask import (
     Flask, render_template, request, redirect,
@@ -11,7 +13,7 @@ from flask import (
 
 from werkzeug.utils import secure_filename
 from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect, text, or_
 from sqlalchemy.exc import IntegrityError
 
 from flask_login import (
@@ -210,6 +212,52 @@ class AuditLog(db.Model):
 
 
 # =====================================
+# DOCUMENT SHARING DATABASE
+# =====================================
+
+class DocumentShare(db.Model):
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("document.id"),
+        nullable=False
+    )
+
+    sender_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False
+    )
+
+    recipient_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False
+    )
+
+    is_active = db.Column(
+        db.Boolean,
+        default=True,
+        nullable=False
+    )
+
+    expires_at = db.Column(
+        db.DateTime,
+        nullable=True
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=db.func.current_timestamp()
+    )
+
+
+# =====================================
 # AUDIT LOG HELPER
 # =====================================
 
@@ -223,6 +271,30 @@ def record_audit(action, document_id=None, details=None):
     )
 
     db.session.add(audit_entry)
+
+
+# =====================================
+# DOCUMENT ACCESS CONTROL
+# =====================================
+
+def user_can_access_document(document):
+
+    if document.owner_id == current_user.id:
+        return True
+
+    share = DocumentShare.query.filter_by(
+        document_id=document.id,
+        recipient_id=current_user.id,
+        is_active=True
+    ).first()
+
+    if not share:
+        return False
+
+    if share.expires_at and share.expires_at <= datetime.utcnow():
+        return False
+
+    return True
 
 
 # =====================================
@@ -490,6 +562,265 @@ def upload():
 
 
 # =====================================
+# SHARE DOCUMENT
+# =====================================
+
+@app.route(
+    "/share/<int:document_id>",
+    methods=["GET", "POST"]
+)
+@login_required
+def share_document(document_id):
+
+    document = db.session.get(
+        Document,
+        document_id
+    )
+
+    if document is None:
+        abort(404)
+
+    if document.owner_id != current_user.id:
+        abort(403)
+
+    if request.method == "POST":
+
+        recipient_email = request.form.get(
+            "recipient_email", ""
+        ).strip().lower()
+
+        expiry_input = request.form.get(
+            "expiry_date", ""
+        ).strip()
+
+        recipient = User.query.filter_by(
+            email=recipient_email,
+            active=True
+        ).first()
+
+        if not recipient:
+            flash("No active registered user was found with that email.")
+            return redirect(
+                url_for("share_document", document_id=document.id)
+            )
+
+        if recipient.id == current_user.id:
+            flash("You cannot share a document with yourself.")
+            return redirect(
+                url_for("share_document", document_id=document.id)
+            )
+
+        expiry_date = None
+
+        if expiry_input:
+
+            try:
+
+                parsed_date = datetime.strptime(
+                    expiry_input,
+                    "%Y-%m-%d"
+                ).date()
+
+                expiry_date = datetime.combine(
+                    parsed_date,
+                    time(23, 59, 59)
+                )
+
+                if expiry_date <= datetime.utcnow():
+                    flash("The expiry date must be in the future.")
+                    return redirect(
+                        url_for("share_document", document_id=document.id)
+                    )
+
+            except ValueError:
+
+                flash("Invalid expiry date.")
+                return redirect(
+                    url_for("share_document", document_id=document.id)
+                )
+
+        existing_share = DocumentShare.query.filter_by(
+            document_id=document.id,
+            recipient_id=recipient.id,
+            is_active=True
+        ).first()
+
+        if existing_share:
+
+            if (
+                existing_share.expires_at
+                and existing_share.expires_at <= datetime.utcnow()
+            ):
+                existing_share.is_active = False
+
+            else:
+                existing_share.expires_at = expiry_date
+
+                record_audit(
+                    action="DOCUMENT SHARING UPDATED",
+                    document_id=document.id,
+                    details=f"Sharing expiry updated for {recipient.email}"
+                )
+
+                db.session.commit()
+
+                flash("Existing sharing permission updated.")
+
+                return redirect(url_for("dashboard"))
+
+        new_share = DocumentShare(
+            document_id=document.id,
+            sender_id=current_user.id,
+            recipient_id=recipient.id,
+            expires_at=expiry_date
+        )
+
+        db.session.add(new_share)
+
+        db.session.flush()
+
+        record_audit(
+            action="DOCUMENT SHARED",
+            document_id=document.id,
+            details=f"Shared with {recipient.email}"
+        )
+
+        db.session.add(
+            AuditLog(
+                user_id=recipient.id,
+                document_id=document.id,
+                action="DOCUMENT RECEIVED",
+                details=f"Document shared by {current_user.email}"
+            )
+        )
+
+        try:
+
+            db.session.commit()
+
+            flash("Document shared successfully.")
+
+            return redirect(url_for("dashboard"))
+
+        except Exception:
+
+            db.session.rollback()
+
+            app.logger.exception("Document sharing failed.")
+
+            flash("Document sharing failed.")
+
+    return render_template(
+        "share.html",
+        document=document
+    )
+
+
+# =====================================
+# DOCUMENTS SHARED WITH ME
+# =====================================
+
+@app.route("/shared-with-me")
+@login_required
+def shared_with_me():
+
+    now = datetime.utcnow()
+
+    shares = DocumentShare.query.filter(
+        DocumentShare.recipient_id == current_user.id,
+        DocumentShare.is_active.is_(True),
+        or_(
+            DocumentShare.expires_at.is_(None),
+            DocumentShare.expires_at > now
+        )
+    ).order_by(
+        DocumentShare.created_at.desc()
+    ).all()
+
+    return render_template(
+        "shared_documents.html",
+        shares=shares
+    )
+
+
+# =====================================
+# REVOKE DOCUMENT ACCESS
+# =====================================
+
+@app.route(
+    "/shares/<int:share_id>/revoke",
+    methods=["POST"]
+)
+@login_required
+def revoke_share(share_id):
+
+    share = db.session.get(
+        DocumentShare,
+        share_id
+    )
+
+    if share is None:
+        abort(404)
+
+    document = db.session.get(
+        Document,
+        share.document_id
+    )
+
+    if document is None:
+        abort(404)
+
+    if document.owner_id != current_user.id:
+        abort(403)
+
+    if not share.is_active:
+        flash("This sharing permission is already inactive.")
+        return redirect(url_for("dashboard"))
+
+    share.is_active = False
+
+    recipient = db.session.get(
+        User,
+        share.recipient_id
+    )
+
+    recipient_email = (
+        recipient.email if recipient else "Unknown recipient"
+    )
+
+    record_audit(
+        action="DOCUMENT ACCESS REVOKED",
+        document_id=document.id,
+        details=f"Access revoked for {recipient_email}"
+    )
+
+    db.session.add(
+        AuditLog(
+            user_id=share.recipient_id,
+            document_id=document.id,
+            action="DOCUMENT ACCESS REVOKED",
+            details="The document owner revoked your access."
+        )
+    )
+
+    try:
+
+        db.session.commit()
+
+        flash("Document access revoked successfully.")
+
+    except Exception:
+
+        db.session.rollback()
+
+        app.logger.exception("Access revocation failed.")
+
+        flash("Could not revoke access. Please try again.")
+
+    return redirect(url_for("dashboard"))
+
+
+# =====================================
 # DOCUMENT DOWNLOAD
 # =====================================
 
@@ -505,7 +836,7 @@ def download_document(document_id):
     if document is None:
         abort(404)
 
-    if document.owner_id != current_user.id:
+    if not user_can_access_document(document):
         abort(403)
 
     try:
@@ -564,7 +895,7 @@ def verify_document(document_id):
     if document is None:
         abort(404)
 
-    if document.owner_id != current_user.id:
+    if not user_can_access_document(document):
         abort(403)
 
     try:
@@ -593,8 +924,6 @@ def verify_document(document_id):
 
         return redirect(url_for("dashboard"))
 
-    # CREATE FINGERPRINT FOR OLDER DOCUMENTS
-
     if not document.sha256_hash:
 
         document.sha256_hash = current_hash
@@ -608,13 +937,10 @@ def verify_document(document_id):
         db.session.commit()
 
         flash(
-            "Fingerprint created for this older document. "
-            "Please verify the document again."
+            "Fingerprint created. Please verify the document again."
         )
 
         return redirect(url_for("dashboard"))
-
-    # COMPARE FINGERPRINTS
 
     if hmac.compare_digest(
         document.sha256_hash,
@@ -701,7 +1027,7 @@ def logout():
 
 
 # =====================================
-# CREATE AND UPDATE DATABASE TABLES
+# CREATE DATABASE TABLES
 # =====================================
 
 with app.app_context():
@@ -734,4 +1060,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000
-    )
+        )
