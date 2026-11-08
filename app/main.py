@@ -4,7 +4,7 @@ import hmac
 import base64
 
 from io import BytesIO
-from datetime import datetime, time
+from datetime import datetime, time, timedelta
 
 from flask import (
     Flask, render_template, request, redirect,
@@ -77,6 +77,9 @@ login_manager.login_view = "login"
 
 password_hasher = PasswordHasher()
 
+MAX_LOGIN_ATTEMPTS = 5
+ACCOUNT_LOCK_DURATION = 15
+
 
 # =====================================
 # DOCUMENT ENCRYPTION
@@ -131,6 +134,19 @@ class User(UserMixin, db.Model):
     active = db.Column(
         db.Boolean,
         default=True
+    )
+
+    # LOGIN PROTECTION
+
+    failed_login_attempts = db.Column(
+        db.Integer,
+        nullable=False,
+        default=0
+    )
+
+    locked_until = db.Column(
+        db.DateTime,
+        nullable=True
     )
 
 
@@ -388,7 +404,9 @@ def register():
             full_name=full_name,
             email=email,
             password_hash=hashed_password,
-            role=role
+            role=role,
+            failed_login_attempts=0,
+            locked_until=None
         )
 
         try:
@@ -410,7 +428,7 @@ def register():
 
 
 # =====================================
-# LOGIN
+# LOGIN WITH ACCOUNT LOCKOUT
 # =====================================
 
 @app.route("/login", methods=["GET", "POST"])
@@ -435,6 +453,40 @@ def login():
 
         if user and user.active:
 
+            now = datetime.utcnow()
+
+            # CHECK WHETHER ACCOUNT IS LOCKED
+
+            if user.locked_until:
+
+                if user.locked_until > now:
+
+                    remaining = int(
+                        (user.locked_until - now).total_seconds()
+                    )
+
+                    remaining_minutes = max(
+                        1,
+                        (remaining + 59) // 60
+                    )
+
+                    flash(
+                        f"Your account is temporarily locked. "
+                        f"Please try again in approximately "
+                        f"{remaining_minutes} minute(s)."
+                    )
+
+                    return render_template("login.html")
+
+                else:
+
+                    # LOCK PERIOD HAS EXPIRED
+
+                    user.locked_until = None
+                    user.failed_login_attempts = 0
+
+            # CHECK PASSWORD
+
             try:
 
                 password_hasher.verify(
@@ -442,12 +494,55 @@ def login():
                     password
                 )
 
+                # SUCCESSFUL LOGIN
+
+                user.failed_login_attempts = 0
+                user.locked_until = None
+
+                db.session.commit()
+
                 login_user(user)
+
+                flash("Login successful.")
 
                 return redirect(url_for("dashboard"))
 
             except VerifyMismatchError:
-                pass
+
+                # INCORRECT PASSWORD
+
+                user.failed_login_attempts += 1
+
+                remaining_attempts = (
+                    MAX_LOGIN_ATTEMPTS -
+                    user.failed_login_attempts
+                )
+
+                if user.failed_login_attempts >= MAX_LOGIN_ATTEMPTS:
+
+                    user.locked_until = (
+                        datetime.utcnow() +
+                        timedelta(minutes=ACCOUNT_LOCK_DURATION)
+                    )
+
+                    db.session.commit()
+
+                    flash(
+                        "Too many incorrect login attempts. "
+                        "Your account has been locked for 15 minutes."
+                    )
+
+                else:
+
+                    db.session.commit()
+
+                    flash(
+                        "Invalid email or password. "
+                        f"You have {remaining_attempts} "
+                        "attempt(s) remaining."
+                    )
+
+                return render_template("login.html")
 
         flash("Invalid email or password.")
 
@@ -1081,12 +1176,14 @@ def logout():
 
 
 # =====================================
-# CREATE DATABASE TABLES
+# CREATE DATABASE TABLES AND MIGRATE
 # =====================================
 
 with app.app_context():
 
     db.create_all()
+
+    # Existing document migration
 
     document_columns = {
         column["name"]
@@ -1101,6 +1198,34 @@ with app.app_context():
                 text(
                     "ALTER TABLE document "
                     "ADD COLUMN sha256_hash VARCHAR(64)"
+                )
+            )
+
+    # Existing user table migration
+
+    user_columns = {
+        column["name"]
+        for column in inspect(db.engine).get_columns("user")
+    }
+
+    with db.engine.begin() as connection:
+
+        if "failed_login_attempts" not in user_columns:
+
+            connection.execute(
+                text(
+                    'ALTER TABLE "user" '
+                    "ADD COLUMN failed_login_attempts "
+                    "INTEGER NOT NULL DEFAULT 0"
+                )
+            )
+
+        if "locked_until" not in user_columns:
+
+            connection.execute(
+                text(
+                    'ALTER TABLE "user" '
+                    "ADD COLUMN locked_until TIMESTAMP NULL"
                 )
             )
 
