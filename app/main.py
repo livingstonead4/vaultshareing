@@ -54,7 +54,27 @@ class User(UserMixin, db.Model):
 
     active = db.Column(db.Boolean, default=True)
 
+# DOCUMENT DATABASE
 
+class Document(db.Model):
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    filename = db.Column(db.String(255), nullable=False)
+
+    encrypted_data = db.Column(db.LargeBinary, nullable=False)
+
+    owner_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False
+    )
+
+    uploaded_at = db.Column(
+        db.DateTime,
+        default=db.func.current_timestamp()
+    )
+    
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
