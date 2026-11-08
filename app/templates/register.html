@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Register | VaultShare</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #101827;
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: #1e293b;
+            padding: 30px;
+            border-radius: 15px;
+            width: 85%;
+            max-width: 400px;
+        }
+
+        h1 {
+            text-align: center;
+            color: #38bdf8;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 13px;
+            margin: 10px 0;
+            border-radius: 7px;
+            border: none;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #0284c7;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+        }
+
+        a {
+            color: #38bdf8;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <h1>VaultShare</h1>
+
+    <h3>Create Your Account</h3>
+
+    <form method="POST">
+
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <input type="text"
+               name="full_name"
+               placeholder="Full Name"
+               required>
+
+        <input type="email"
+               name="email"
+               placeholder="Email Address"
+               required>
+
+        <input type="password"
+               name="password"
+               placeholder="Password"
+               required>
+
+        <input type="password"
+               name="confirm_password"
+               placeholder="Confirm Password"
+               required>
+
+        <select name="role" required>
+            <option value="">Select Account Type</option>
+            <option value="sender">Sender</option>
+            <option value="recipient">Recipient</option>
+        </select>
+
+        <button type="submit">Create Account</button>
+
+    </form>
+
+    <div class="footer">
+        Already registered?
+        <a href="/login">Login</a>
+    </div>
+
+</div>
+
+</body>
+</html>
