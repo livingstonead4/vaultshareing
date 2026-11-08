@@ -1,91 +1,145 @@
-<!DOCTYPE html><html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Shared With Me - VaultShare</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <style>
         body {
             font-family: Arial, sans-serif;
-            background: #f4f6f9;
+            background: #f2f5fa;
+            margin: 0;
             padding: 20px;
-        }    .container {
-        max-width: 750px;
-        margin: 30px auto;
-        background: white;
-        padding: 25px;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-    }
+        }
 
-    .document {
-        border: 1px solid #ddd;
-        padding: 15px;
-        margin: 15px 0;
-        border-radius: 8px;
-    }
+        header {
+            background: #17365d;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
 
-    a, button {
-        display: inline-block;
-        padding: 10px 14px;
-        margin-top: 10px;
-        text-decoration: none;
-        border: none;
-        border-radius: 5px;
-        cursor: pointer;
-    }
+        .container {
+            max-width: 850px;
+            margin: 25px auto;
+        }
 
-    a {
-        background: #155eef;
-        color: white;
-    }
+        .document {
+            background: white;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        }
 
-    button {
-        background: #198754;
-        color: white;
-    }
+        .document h3 {
+            color: #17365d;
+            overflow-wrap: anywhere;
+        }
 
-    .empty {
-        color: #666;
-    }
-</style>
+        .button {
+            display: inline-block;
+            background: #17365d;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            text-decoration: none;
+            cursor: pointer;
+            margin: 5px 5px 5px 0;
+        }
 
+        .button:hover {
+            background: #24548a;
+        }
+
+        .empty {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+        }
+    </style>
 </head>
-<body><div class="container">
-    <h2>Documents Shared With Me</h2>{% if shares %}
-    {% for share in shares %}
-        <div class="document">
-            <h3>Shared Document #{{ share.document_id }}</h3>
 
-            <p>Share ID: {{ share.id }}</p>
+<body>
 
-            <p>
-                Shared on: {{ share.created_at }}
-            </p>
+<header>
+    <h1>VaultShare</h1>
+    <h2>Documents Shared With Me</h2>
+</header>
 
-            {% if share.expires_at %}
-                <p>Access expires: {{ share.expires_at }}</p>
-            {% else %}
-                <p>Access does not have an expiry date.</p>
-            {% endif %}
+<div class="container">
 
-            <a href="{{ url_for('download_document', document_id=share.document_id) }}">
-                Download Document
-            </a>
+    {% if shared_items %}
 
-            <form method="POST"
-                  action="{{ url_for('verify_document', document_id=share.document_id) }}">
+        {% for share, document, sender in shared_items %}
 
-                <input type="hidden" name="csrf_token"
-                       value="{{ csrf_token() }}">
+            <div class="document">
 
-                <button type="submit">Verify Document</button>
-            </form>
+                <h3>{{ document.filename }}</h3>
+
+                <p>
+                    <strong>Shared by:</strong>
+                    {{ sender.email }}
+                </p>
+
+                <p>
+                    <strong>Shared on:</strong>
+                    {{ share.created_at }}
+                </p>
+
+                <p>
+                    <strong>Access expires:</strong>
+
+                    {% if share.expires_at %}
+                        {{ share.expires_at }}
+                    {% else %}
+                        No expiry date
+                    {% endif %}
+                </p>
+
+                <a class="button"
+                   href="{{ url_for('download_document', document_id=document.id) }}">
+                    Download Document
+                </a>
+
+                <form method="POST"
+                      action="{{ url_for('verify_document', document_id=document.id) }}"
+                      style="display:inline;">
+
+                    <input type="hidden"
+                           name="csrf_token"
+                           value="{{ csrf_token() }}">
+
+                    <button class="button" type="submit">
+                        Verify Document
+                    </button>
+
+                </form>
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <div class="empty">
+            <h3>No documents shared with you yet.</h3>
+            <p>Documents shared with your account will appear here.</p>
         </div>
-    {% endfor %}
-{% else %}
-    <p class="empty">No documents have been shared with you yet.</p>
-{% endif %}
 
-<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+    {% endif %}
 
-</div></body>
+    <p>
+        <a class="button" href="{{ url_for('dashboard') }}">
+            Back to Dashboard
+        </a>
+    </p>
+
+</div>
+
+</body>
 </html>
