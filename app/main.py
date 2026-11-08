@@ -1,28 +1,65 @@
 import os
-from flask import Flask, render_template, request, redirect, url_for, flash
+import hashlib
+import base64
+from io import BytesIO
+
+from flask import (
+    Flask, render_template, request, redirect,
+    url_for, flash, send_file, abort
+)
+
+from werkzeug.utils import secure_filename
+
 from flask_sqlalchemy import SQLAlchemy
+
 from flask_login import (
     LoginManager, UserMixin, login_user,
     login_required, logout_user, current_user
 )
+
 from flask_wtf.csrf import CSRFProtect
+
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+
 from sqlalchemy.exc import IntegrityError
+
+from cryptography.fernet import Fernet, InvalidToken
+
+
+# APPLICATION SETUP
 
 app = Flask(__name__, template_folder="templates")
 
-app.config["SECRET_KEY"] = os.environ.get("SECRET_KEY", "development-key-change-me")
+app.config["SECRET_KEY"] = os.environ.get(
+    "SECRET_KEY",
+    "development-key-change-me"
+)
 
-database_url = os.environ.get("DATABASE_URL", "sqlite:///vaultshare.db")
+app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
+
+
+# DATABASE CONNECTION
+
+database_url = os.environ.get(
+    "DATABASE_URL",
+    "sqlite:///vaultshare.db"
+)
 
 if database_url.startswith("postgres://"):
-    database_url = database_url.replace("postgres://", "postgresql://", 1)
+    database_url = database_url.replace(
+        "postgres://",
+        "postgresql://",
+        1
+    )
 
 app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
+
+
+# SECURITY SETUP
 
 csrf = CSRFProtect(app)
 
@@ -33,13 +70,34 @@ login_manager.login_view = "login"
 password_hasher = PasswordHasher()
 
 
+# DOCUMENT ENCRYPTION
+
+encryption_secret = os.environ.get(
+    "DOCUMENT_ENCRYPTION_SECRET"
+)
+
+if not encryption_secret:
+    raise RuntimeError(
+        "DOCUMENT_ENCRYPTION_SECRET is missing from environment variables."
+    )
+
+encryption_key = base64.urlsafe_b64encode(
+    hashlib.sha256(encryption_secret.encode()).digest()
+)
+
+fernet = Fernet(encryption_key)
+
+
 # USER DATABASE
 
 class User(UserMixin, db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
 
-    full_name = db.Column(db.String(150), nullable=False)
+    full_name = db.Column(
+        db.String(150),
+        nullable=False
+    )
 
     email = db.Column(
         db.String(150),
@@ -48,21 +106,40 @@ class User(UserMixin, db.Model):
         index=True
     )
 
-    password_hash = db.Column(db.String(255), nullable=False)
+    password_hash = db.Column(
+        db.String(255),
+        nullable=False
+    )
 
-    role = db.Column(db.String(30), nullable=False)
+    role = db.Column(
+        db.String(30),
+        nullable=False
+    )
 
-    active = db.Column(db.Boolean, default=True)
+    active = db.Column(
+        db.Boolean,
+        default=True
+    )
+
 
 # DOCUMENT DATABASE
 
 class Document(db.Model):
 
-    id = db.Column(db.Integer, primary_key=True)
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
 
-    filename = db.Column(db.String(255), nullable=False)
+    filename = db.Column(
+        db.String(255),
+        nullable=False
+    )
 
-    encrypted_data = db.Column(db.LargeBinary, nullable=False)
+    encrypted_data = db.Column(
+        db.LargeBinary,
+        nullable=False
+    )
 
     owner_id = db.Column(
         db.Integer,
@@ -74,7 +151,10 @@ class Document(db.Model):
         db.DateTime,
         default=db.func.current_timestamp()
     )
-    
+
+
+# USER LOGIN MANAGEMENT
+
 @login_manager.user_loader
 def load_user(user_id):
     return db.session.get(User, int(user_id))
@@ -84,6 +164,7 @@ def load_user(user_id):
 
 @app.route("/")
 def home():
+
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
 
@@ -100,13 +181,33 @@ def register():
 
     if request.method == "POST":
 
-        full_name = request.form.get("full_name", "").strip()
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
-        confirm_password = request.form.get("confirm_password", "")
-        role = request.form.get("role", "").strip().lower()
+        full_name = request.form.get(
+            "full_name", ""
+        ).strip()
 
-        if not all([full_name, email, password, confirm_password, role]):
+        email = request.form.get(
+            "email", ""
+        ).strip().lower()
+
+        password = request.form.get(
+            "password", ""
+        )
+
+        confirm_password = request.form.get(
+            "confirm_password", ""
+        )
+
+        role = request.form.get(
+            "role", ""
+        ).strip().lower()
+
+        if not all([
+            full_name,
+            email,
+            password,
+            confirm_password,
+            role
+        ]):
             flash("Please complete all fields.")
             return redirect(url_for("register"))
 
@@ -122,7 +223,9 @@ def register():
             flash("Passwords do not match.")
             return redirect(url_for("register"))
 
-        existing_user = User.query.filter_by(email=email).first()
+        existing_user = User.query.filter_by(
+            email=email
+        ).first()
 
         if existing_user:
             flash("This email is already registered.")
@@ -138,14 +241,18 @@ def register():
         )
 
         try:
+
             db.session.add(new_user)
             db.session.commit()
 
             flash("Registration successful. Please log in.")
+
             return redirect(url_for("login"))
 
         except IntegrityError:
+
             db.session.rollback()
+
             flash("This email is already registered.")
 
     return render_template("register.html")
@@ -161,20 +268,29 @@ def login():
 
     if request.method == "POST":
 
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
+        email = request.form.get(
+            "email", ""
+        ).strip().lower()
 
-        user = User.query.filter_by(email=email).first()
+        password = request.form.get(
+            "password", ""
+        )
+
+        user = User.query.filter_by(
+            email=email
+        ).first()
 
         if user and user.active:
 
             try:
+
                 password_hasher.verify(
                     user.password_hash,
                     password
                 )
 
                 login_user(user)
+
                 return redirect(url_for("dashboard"))
 
             except VerifyMismatchError:
@@ -191,9 +307,113 @@ def login():
 @login_required
 def dashboard():
 
+    documents = Document.query.filter_by(
+        owner_id=current_user.id
+    ).order_by(
+        Document.uploaded_at.desc()
+    ).all()
+
     return render_template(
         "dashboard.html",
-        user=current_user
+        user=current_user,
+        documents=documents
+    )
+
+
+# DOCUMENT UPLOAD
+
+@app.route("/upload", methods=["GET", "POST"])
+@login_required
+def upload():
+
+    if request.method == "POST":
+
+        file = request.files.get("document")
+
+        if not file or not file.filename:
+            flash("Please select a document.")
+            return redirect(url_for("upload"))
+
+        filename = secure_filename(file.filename)
+
+        if not filename:
+            flash("Invalid filename.")
+            return redirect(url_for("upload"))
+
+        allowed_extensions = {
+            "pdf", "doc", "docx", "txt",
+            "xls", "xlsx", "ppt", "pptx",
+            "csv", "png", "jpg", "jpeg"
+        }
+
+        extension = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+
+        if extension not in allowed_extensions:
+            flash("This file type is not supported.")
+            return redirect(url_for("upload"))
+
+        file_data = file.read()
+
+        if not file_data:
+            flash("The selected file is empty.")
+            return redirect(url_for("upload"))
+
+        encrypted_data = fernet.encrypt(file_data)
+
+        new_document = Document(
+            filename=filename,
+            encrypted_data=encrypted_data,
+            owner_id=current_user.id
+        )
+
+        try:
+
+            db.session.add(new_document)
+            db.session.commit()
+
+            flash("Document uploaded and encrypted successfully.")
+
+            return redirect(url_for("dashboard"))
+
+        except Exception:
+
+            db.session.rollback()
+
+            flash("Document upload failed.")
+
+    return render_template("upload.html")
+
+
+# DOCUMENT DOWNLOAD
+
+@app.route("/documents/<int:document_id>/download")
+@login_required
+def download_document(document_id):
+
+    document = db.session.get(
+        Document,
+        document_id
+    )
+
+    if document is None:
+        abort(404)
+
+    if document.owner_id != current_user.id:
+        abort(403)
+
+    try:
+
+        decrypted_data = fernet.decrypt(
+            document.encrypted_data
+        )
+
+    except InvalidToken:
+        abort(500)
+
+    return send_file(
+        BytesIO(decrypted_data),
+        as_attachment=True,
+        download_name=document.filename
     )
 
 
@@ -216,5 +436,11 @@ with app.app_context():
     db.create_all()
 
 
+# RUN APPLICATION
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000)
+
+    app.run(
+        host="0.0.0.0",
+        port=5000
+    )
