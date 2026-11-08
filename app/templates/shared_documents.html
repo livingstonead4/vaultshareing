@@ -1,0 +1,91 @@
+<!DOCTYPE html><html>
+<head>
+    <title>Shared With Me - VaultShare</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            padding: 20px;
+        }    .container {
+        max-width: 750px;
+        margin: 30px auto;
+        background: white;
+        padding: 25px;
+        border-radius: 10px;
+        box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .document {
+        border: 1px solid #ddd;
+        padding: 15px;
+        margin: 15px 0;
+        border-radius: 8px;
+    }
+
+    a, button {
+        display: inline-block;
+        padding: 10px 14px;
+        margin-top: 10px;
+        text-decoration: none;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    a {
+        background: #155eef;
+        color: white;
+    }
+
+    button {
+        background: #198754;
+        color: white;
+    }
+
+    .empty {
+        color: #666;
+    }
+</style>
+
+</head>
+<body><div class="container">
+    <h2>Documents Shared With Me</h2>{% if shares %}
+    {% for share in shares %}
+        <div class="document">
+            <h3>Shared Document #{{ share.document_id }}</h3>
+
+            <p>Share ID: {{ share.id }}</p>
+
+            <p>
+                Shared on: {{ share.created_at }}
+            </p>
+
+            {% if share.expires_at %}
+                <p>Access expires: {{ share.expires_at }}</p>
+            {% else %}
+                <p>Access does not have an expiry date.</p>
+            {% endif %}
+
+            <a href="{{ url_for('download_document', document_id=share.document_id) }}">
+                Download Document
+            </a>
+
+            <form method="POST"
+                  action="{{ url_for('verify_document', document_id=share.document_id) }}">
+
+                <input type="hidden" name="csrf_token"
+                       value="{{ csrf_token() }}">
+
+                <button type="submit">Verify Document</button>
+            </form>
+        </div>
+    {% endfor %}
+{% else %}
+    <p class="empty">No documents have been shared with you yet.</p>
+{% endif %}
+
+<a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+
+</div></body>
+</html>
