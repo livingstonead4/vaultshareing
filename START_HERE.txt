@@ -1,0 +1,9 @@
+VAULTSHARE START HERE
+
+1. Extract this ZIP file.
+2. Install Python 3.11 or newer.
+3. Open a terminal in this folder.
+4. Follow the local run commands in README.md.
+5. Open http://127.0.0.1:8000 in your browser.
+
+This is a prototype starter. Read the security limitations in README.md before using it.
