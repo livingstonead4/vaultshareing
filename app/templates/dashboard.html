@@ -1,128 +1,141 @@
-<!DOCTYPE html>
-<html lang="en">
+<!DOCTYPE html><html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VaultShare Dashboard</title>
+    <title>VaultShare Dashboard</title><style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f2f5fa;
+        margin: 0;
+    }
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f2f5fa;
-            margin: 0;
-        }
+    header {
+        background: #17365d;
+        color: white;
+        padding: 20px;
+        text-align: center;
+    }
 
-        header {
-            background: #17365d;
-            color: white;
-            padding: 20px;
-            text-align: center;
-        }
+    .container {
+        max-width: 750px;
+        margin: 30px auto;
+        padding: 20px;
+    }
 
-        .container {
-            max-width: 750px;
-            margin: 30px auto;
-            padding: 20px;
-        }
+    .card {
+        background: white;
+        padding: 25px;
+        margin-bottom: 20px;
+        border-radius: 10px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    }
 
-        .card {
-            background: white;
-            padding: 25px;
-            margin-bottom: 20px;
-            border-radius: 10px;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.08);
-        }
+    h2 {
+        color: #17365d;
+    }
 
-        h2 {
-            color: #17365d;
-        }
+    .button {
+        display: inline-block;
+        background: #17365d;
+        color: white;
+        padding: 12px 20px;
+        border-radius: 6px;
+        text-decoration: none;
+        margin-top: 10px;
+    }
 
-        .button {
-            display: inline-block;
-            background: #17365d;
-            color: white;
-            padding: 12px 20px;
-            border-radius: 6px;
-            text-decoration: none;
-            margin-top: 10px;
-        }
+    .logout {
+        background: #b00020;
+    }
 
-        .logout {
-            background: #b00020;
-        }
+    .document {
+        padding: 15px;
+        border-bottom: 1px solid #ddd;
+    }
 
-        .document {
-            padding: 12px;
-            border-bottom: 1px solid #ddd;
-        }
-    </style>
-</head>
+    .encrypted-badge {
+        display: inline-block;
+        background: #d4edda;
+        color: #155724;
+        padding: 6px 10px;
+        border-radius: 5px;
+        font-size: 13px;
+        font-weight: bold;
+        margin-top: 8px;
+    }
 
-<body>
+    .download-link {
+        display: inline-block;
+        margin-top: 10px;
+        color: #17365d;
+        font-weight: bold;
+    }
+</style>
 
-<header>
+</head><body><header>
     <h1>VaultShare</h1>
     <p>Secure Document Sharing and Verification</p>
-</header>
+</header><div class="container"><div class="card">
+    <h2>Welcome, {{ current_user.full_name }}!</h2>
 
-<div class="container">
+    <p>Email: {{ current_user.email }}</p>
+    <p>Account type: {{ current_user.role }}</p>
+</div>
 
-    <div class="card">
-        <h2>Welcome, {{ current_user.full_name }}!</h2>
+<div class="card">
+    <h2>Document Management</h2>
 
-        <p>Email: {{ current_user.email }}</p>
-        <p>Account type: {{ current_user.role }}</p>
-    </div>
+    <p>Upload and securely store your documents.</p>
 
-    <div class="card">
-        <h2>Document Management</h2>
+    <a class="button" href="{{ url_for('upload') }}">
+        Upload Document
+    </a>
+</div>
 
-        <p>Upload and securely store your documents.</p>
+<div class="card">
+    <h2>My Documents</h2>
 
-        <a class="button" href="{{ url_for('upload') }}">
-            Upload Document
-        </a>
-    </div>
+    {% if documents %}
 
-    <div class="card">
-        <h2>My Documents</h2>
+        {% for document in documents %}
 
-        {% if documents %}
+            <div class="document">
 
-            {% for document in documents %}
+                <strong>{{ document.filename }}</strong>
 
-                <div class="document">
+                <br>
 
-                    <strong>{{ document.filename }}</strong>
+                <span class="encrypted-badge">
+                    🔒 Encrypted
+                </span>
 
-                    <br>
+                <br>
 
-                    <a href="{{ url_for('download_document', document_id=document.id) }}">
-                        Download Document
-                    </a>
+                <a class="download-link"
+                   href="{{ url_for('download_document', document_id=document.id) }}">
+                    Download Document
+                </a>
 
-                </div>
+            </div>
 
-            {% endfor %}
+        {% endfor %}
 
-        {% else %}
+    {% else %}
 
-            <p>You haven't uploaded any documents yet.</p>
+        <p>You haven't uploaded any documents yet.</p>
 
-        {% endif %}
-
-    </div>
-
-    <div class="card">
-        <h2>Account</h2>
-
-        <a class="button logout"
-           href="{{ url_for('logout') }}">
-            Log Out
-        </a>
-    </div>
+    {% endif %}
 
 </div>
 
-</body>
+<div class="card">
+    <h2>Account</h2>
+
+    <a class="button logout"
+       href="{{ url_for('logout') }}">
+        Log Out
+    </a>
+</div>
+
+</div></body>
 </html>
