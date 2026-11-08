@@ -42,10 +42,17 @@
         border-radius: 6px;
         text-decoration: none;
         margin-top: 10px;
+        border: none;
+        cursor: pointer;
+        font-size: 14px;
     }
 
     .logout {
         background: #b00020;
+    }
+
+    .verify {
+        background: #198754;
     }
 
     .document {
@@ -70,12 +77,25 @@
         color: #17365d;
         font-weight: bold;
     }
+
+    .message {
+        background: #e8f4fd;
+        padding: 12px;
+        border-radius: 6px;
+        margin-bottom: 12px;
+    }
 </style>
 
 </head><body><header>
     <h1>VaultShare</h1>
     <p>Secure Document Sharing and Verification</p>
-</header><div class="container"><div class="card">
+</header><div class="container">{% with messages = get_flashed_messages() %}
+    {% for message in messages %}
+        <div class="message">{{ message }}</div>
+    {% endfor %}
+{% endwith %}
+
+<div class="card">
     <h2>Welcome, {{ current_user.full_name }}!</h2>
 
     <p>Email: {{ current_user.email }}</p>
@@ -115,6 +135,21 @@
                    href="{{ url_for('download_document', document_id=document.id) }}">
                     Download Document
                 </a>
+
+                <br>
+
+                <form method="POST"
+                      action="{{ url_for('verify_document', document_id=document.id) }}">
+
+                    <input type="hidden"
+                           name="csrf_token"
+                           value="{{ csrf_token() }}">
+
+                    <button type="submit" class="button verify">
+                        🔍 Verify Document
+                    </button>
+
+                </form>
 
             </div>
 
