@@ -1,154 +1,217 @@
-<!DOCTYPE html>
-<html>
+<!DOCTYPE html><html>
 <head>
     <title>VaultShare Dashboard</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1"><style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f2f5fa;
+        margin: 0;
+        padding: 20px;
+    }
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f2f5fa;
-            margin: 0;
-            padding: 20px;
-        }
+    header {
+        background: #17365d;
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+    }
 
-        header {
-            background: #17365d;
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-        }
+    .container {
+        max-width: 900px;
+        margin: 25px auto;
+    }
 
-        .container {
-            max-width: 900px;
-            margin: 25px auto;
-        }
+    .card {
+        background: white;
+        padding: 20px;
+        margin-bottom: 15px;
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
 
-        .card {
-            background: white;
-            padding: 20px;
-            margin-bottom: 15px;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-        }
+    .button {
+        display: inline-block;
+        padding: 10px 15px;
+        margin: 5px 3px;
+        background: #155eef;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        border: none;
+        cursor: pointer;
+    }
 
-        .button {
-            display: inline-block;
-            padding: 10px 15px;
-            margin: 5px 3px;
-            background: #155eef;
-            color: white;
-            text-decoration: none;
-            border-radius: 5px;
-            border: none;
-            cursor: pointer;
-        }
+    .green {
+        background: #198754;
+    }
 
-        .green {
-            background: #198754;
-        }
+    .red {
+        background: #dc3545;
+    }
 
-        .red {
-            background: #dc3545;
-        }
+    .purple {
+        background: #6f42c1;
+    }
 
-        .badge {
-            color: green;
-            font-weight: bold;
-        }
+    .badge {
+        color: green;
+        font-weight: bold;
+    }
 
-        input[type="submit"] {
-            cursor: pointer;
-        }
-    </style>
-</head>
+    .signature-box {
+        background: #f2f0ff;
+        padding: 12px;
+        border-radius: 6px;
+        margin-top: 12px;
+    }
 
-<body>
+    form {
+        display: inline-block;
+    }
+</style>
 
-<header>
+</head><body><header>
     <h2>VaultShare Dashboard</h2>
     <p>Welcome, {{ user.full_name }}!</p>
     <p>{{ user.email }}</p>
-</header>
+</header><div class="container"><div class="card">
+    <h3>Document Management</h3>
 
-<div class="container">
+    <a class="button" href="{{ url_for('upload') }}">
+        Upload New Document
+    </a>
 
-    <div class="card">
-        <h3>Document Management</h3>
+    <a class="button green" href="{{ url_for('shared_with_me') }}">
+        Documents Shared With Me
+    </a>
 
-        <a class="button" href="{{ url_for('upload') }}">
-            Upload New Document
-        </a>
-
-        <a class="button green" href="{{ url_for('shared_with_me') }}">
-            Documents Shared With Me
-        </a>
-
-        <a class="button" href="{{ url_for('audit_log') }}">
-            View Audit Log
-        </a>
-    </div>
-
-    <div class="card">
-        <h3>My Documents</h3>
-
-        {% if documents %}
-
-            {% for document in documents %}
-
-                <div class="card">
-                    <h4>{{ document.filename }}</h4>
-
-                    <p>
-                        <span class="badge">🔒 Encrypted</span>
-                    </p>
-
-                    <p>
-                        Uploaded:
-                        {{ document.uploaded_at }}
-                    </p>
-
-                    <a class="button"
-                       href="{{ url_for('download_document', document_id=document.id) }}">
-                        Download
-                    </a>
-
-                    <a class="button green"
-                       href="{{ url_for('share_document', document_id=document.id) }}">
-                        Share Document
-                    </a>
-
-                    <form method="POST"
-                          action="{{ url_for('verify_document', document_id=document.id) }}">
-
-                        <input type="hidden"
-                               name="csrf_token"
-                               value="{{ csrf_token() }}">
-
-                        <button class="button" type="submit">
-                            Verify Document
-                        </button>
-
-                    </form>
-
-                </div>
-
-            {% endfor %}
-
-        {% else %}
-
-            <p>You have not uploaded any documents yet.</p>
-
-        {% endif %}
-    </div>
-
-    <div class="card">
-        <a class="button red" href="{{ url_for('logout') }}">
-            Logout
-        </a>
-    </div>
-
+    <a class="button" href="{{ url_for('audit_log') }}">
+        View Audit Log
+    </a>
 </div>
 
-</body>
+<div class="card">
+    <h3>My Documents</h3>
+
+    {% if documents %}
+
+        {% for document in documents %}
+
+            <div class="card">
+
+                <h4>{{ document.filename }}</h4>
+
+                <p>
+                    <span class="badge">🔒 Encrypted</span>
+                </p>
+
+                <p>
+                    Uploaded:
+                    {{ document.uploaded_at }}
+                </p>
+
+                <a class="button"
+                   href="{{ url_for('download_document', document_id=document.id) }}">
+                    Download
+                </a>
+
+                <a class="button green"
+                   href="{{ url_for('share_document', document_id=document.id) }}">
+                    Share Document
+                </a>
+
+                <form method="POST"
+                      action="{{ url_for('verify_document', document_id=document.id) }}">
+
+                    <input type="hidden"
+                           name="csrf_token"
+                           value="{{ csrf_token() }}">
+
+                    <button class="button" type="submit">
+                        Verify Document
+                    </button>
+
+                </form>
+
+                <hr>
+
+                <h4>Digital Signatures</h4>
+
+                <form method="POST"
+                      action="{{ url_for('sign_document', document_id=document.id) }}">
+
+                    <input type="hidden"
+                           name="csrf_token"
+                           value="{{ csrf_token() }}">
+
+                    <button class="button purple" type="submit">
+                        Sign Document
+                    </button>
+
+                </form>
+
+                {% set signatures = signatures_by_document.get(document.id, []) %}
+
+                {% if signatures %}
+
+                    {% for signature in signatures %}
+
+                        <div class="signature-box">
+
+                            <p>
+                                <strong>Signature ID:</strong>
+                                {{ signature.id }}
+                            </p>
+
+                            <p>
+                                <strong>Signer Account ID:</strong>
+                                {{ signature.signer_id }}
+                            </p>
+
+                            <p>
+                                <strong>Signed:</strong>
+                                {{ signature.created_at }}
+                            </p>
+
+                            <form method="POST"
+                                  action="{{ url_for('verify_digital_signature', document_id=document.id, signature_id=signature.id) }}">
+
+                                <input type="hidden"
+                                       name="csrf_token"
+                                       value="{{ csrf_token() }}">
+
+                                <button class="button green" type="submit">
+                                    Verify Digital Signature
+                                </button>
+
+                            </form>
+
+                        </div>
+
+                    {% endfor %}
+
+                {% else %}
+
+                    <p>No digital signatures yet.</p>
+
+                {% endif %}
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <p>You have not uploaded any documents yet.</p>
+
+    {% endif %}
+</div>
+
+<div class="card">
+    <a class="button red" href="{{ url_for('logout') }}">
+        Logout
+    </a>
+</div>
+
+</div></body>
 </html>
