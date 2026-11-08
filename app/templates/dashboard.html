@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard - VaultShare</title>
+    <title>VaultShare Dashboard</title>
 
     <style>
         body {
@@ -20,7 +20,7 @@
         }
 
         .container {
-            max-width: 700px;
+            max-width: 750px;
             margin: 30px auto;
             padding: 20px;
         }
@@ -37,17 +37,23 @@
             color: #17365d;
         }
 
-        a.button {
+        .button {
             display: inline-block;
             background: #17365d;
             color: white;
             padding: 12px 20px;
             border-radius: 6px;
             text-decoration: none;
+            margin-top: 10px;
         }
 
         .logout {
             background: #b00020;
+        }
+
+        .document {
+            padding: 12px;
+            border-bottom: 1px solid #ddd;
         }
     </style>
 </head>
@@ -63,19 +69,57 @@
 
     <div class="card">
         <h2>Welcome, {{ current_user.full_name }}!</h2>
-        <p>You have successfully logged in to VaultShare.</p>
-        <p><strong>Email:</strong> {{ current_user.email }}</p>
-        <p><strong>Role:</strong> {{ current_user.role }}</p>
+
+        <p>Email: {{ current_user.email }}</p>
+        <p>Account type: {{ current_user.role }}</p>
     </div>
 
     <div class="card">
         <h2>Document Management</h2>
-        <p>Your document-sharing tools will appear here.</p>
+
+        <p>Upload and securely store your documents.</p>
+
+        <a class="button" href="{{ url_for('upload') }}">
+            Upload Document
+        </a>
+    </div>
+
+    <div class="card">
+        <h2>My Documents</h2>
+
+        {% if documents %}
+
+            {% for document in documents %}
+
+                <div class="document">
+
+                    <strong>{{ document.filename }}</strong>
+
+                    <br>
+
+                    <a href="{{ url_for('download_document', document_id=document.id) }}">
+                        Download Document
+                    </a>
+
+                </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p>You haven't uploaded any documents yet.</p>
+
+        {% endif %}
+
     </div>
 
     <div class="card">
         <h2>Account</h2>
-        <a class="button logout" href="{{ url_for('logout') }}">Log Out</a>
+
+        <a class="button logout"
+           href="{{ url_for('logout') }}">
+            Log Out
+        </a>
     </div>
 
 </div>
