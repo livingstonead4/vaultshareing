@@ -1,57 +1,90 @@
-<!DOCTYPE html>
-<html>
+<!DOCTYPE html><html lang="en">
 <head>
-    <title>Share Document - VaultShare</title>
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f4f6f9;
-            padding: 20px;
-        }
+    <title>Share Document - VaultShare</title><style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f2f5fa;
+        margin: 0;
+        padding: 20px;
+    }
 
-        .container {
-            max-width: 500px;
-            margin: 40px auto;
-            background: white;
-            padding: 25px;
-            border-radius: 10px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-        }
+    .container {
+        max-width: 750px;
+        margin: 30px auto;
+    }
 
-        input, button {
-            width: 100%;
-            padding: 12px;
-            margin-top: 12px;
-            box-sizing: border-box;
-        }
+    .card {
+        background: white;
+        padding: 25px;
+        margin-bottom: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
 
-        button {
-            background: #155eef;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-        }
+    input, button {
+        padding: 12px;
+        margin-top: 10px;
+        box-sizing: border-box;
+    }
 
-        a {
-            display: inline-block;
-            margin-top: 18px;
-            color: #155eef;
-        }
-    </style>
-</head>
-<body>
+    input[type="email"],
+    input[type="date"] {
+        width: 100%;
+    }
 
-<div class="container">
+    button, .back {
+        display: inline-block;
+        padding: 11px 16px;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        text-decoration: none;
+        color: white;
+    }
+
+    button {
+        background: #155eef;
+    }
+
+    .revoke {
+        background: #dc3545;
+    }
+
+    .back {
+        background: #17365d;
+        margin-top: 15px;
+    }
+
+    .access {
+        border: 1px solid #ddd;
+        padding: 15px;
+        margin-top: 15px;
+        border-radius: 7px;
+    }
+
+    .empty {
+        color: #666;
+    }
+</style>
+
+</head><body><div class="container"><div class="card">
     <h2>Share Document</h2>
 
-    <p><strong>Document:</strong> {{ document.filename }}</p>
+    <p>
+        <strong>Document:</strong>
+        {{ document.filename }}
+    </p>
 
     <form method="POST">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <input type="hidden"
+               name="csrf_token"
+               value="{{ csrf_token() }}">
 
         <label>Recipient's registered email address</label>
+
         <input
             type="email"
             name="recipient_email"
@@ -60,13 +93,93 @@
         >
 
         <label>Access expiry date (optional)</label>
-        <input type="date" name="expiry_date">
 
-        <button type="submit">Share Document</button>
+        <input
+            type="date"
+            name="expiry_date"
+        >
+
+        <button type="submit">
+            Share Document
+        </button>
+
     </form>
-
-    <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
 </div>
 
-</body>
+
+<div class="card">
+
+    <h2>Manage Document Access</h2>
+
+    <p>These users currently have sharing permissions for this document.</p>
+
+    {% if shared_access %}
+
+        {% for share, recipient in shared_access %}
+
+            <div class="access">
+
+                <p>
+                    <strong>Recipient:</strong>
+                    {{ recipient.email }}
+                </p>
+
+                <p>
+                    <strong>Shared on:</strong>
+                    {{ share.created_at }}
+                </p>
+
+                {% if share.expires_at %}
+
+                    <p>
+                        <strong>Expiry:</strong>
+                        {{ share.expires_at }}
+                    </p>
+
+                {% else %}
+
+                    <p>
+                        <strong>Expiry:</strong>
+                        No expiry date
+                    </p>
+
+                {% endif %}
+
+                <form
+                    method="POST"
+                    action="{{ url_for('revoke_share', share_id=share.id) }}"
+                    onsubmit="return confirm('Are you sure you want to revoke this user’s access?');"
+                >
+
+                    <input
+                        type="hidden"
+                        name="csrf_token"
+                        value="{{ csrf_token() }}"
+                    >
+
+                    <button class="revoke" type="submit">
+                        Revoke Access
+                    </button>
+
+                </form>
+
+            </div>
+
+        {% endfor %}
+
+    {% else %}
+
+        <p class="empty">
+            No active sharing permissions for this document.
+        </p>
+
+    {% endif %}
+
+</div>
+
+<a class="back" href="{{ url_for('dashboard') }}">
+    Back to Dashboard
+</a>
+
+</div></body>
 </html>
