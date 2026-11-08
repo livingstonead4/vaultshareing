@@ -28,6 +28,16 @@ from argon2.exceptions import VerifyMismatchError
 
 from cryptography.fernet import Fernet, InvalidToken
 
+from cryptography.hazmat.primitives.asymmetric import (
+    rsa, padding
+)
+
+from cryptography.hazmat.primitives import (
+    hashes, serialization
+)
+
+from cryptography.exceptions import InvalidSignature
+
 
 # =====================================
 # APPLICATION SETUP
@@ -136,8 +146,6 @@ class User(UserMixin, db.Model):
         default=True
     )
 
-    # LOGIN PROTECTION
-
     failed_login_attempts = db.Column(
         db.Integer,
         nullable=False,
@@ -146,6 +154,18 @@ class User(UserMixin, db.Model):
 
     locked_until = db.Column(
         db.DateTime,
+        nullable=True
+    )
+
+    # DIGITAL SIGNING KEYS
+
+    signing_private_key_encrypted = db.Column(
+        db.LargeBinary,
+        nullable=True
+    )
+
+    signing_public_key = db.Column(
+        db.Text,
         nullable=True
     )
 
@@ -183,6 +203,50 @@ class Document(db.Model):
     )
 
     uploaded_at = db.Column(
+        db.DateTime,
+        default=db.func.current_timestamp()
+    )
+
+
+# =====================================
+# DIGITAL SIGNATURE DATABASE
+# =====================================
+
+class DigitalSignature(db.Model):
+
+    id = db.Column(
+        db.Integer,
+        primary_key=True
+    )
+
+    document_id = db.Column(
+        db.Integer,
+        db.ForeignKey("document.id"),
+        nullable=False
+    )
+
+    signer_id = db.Column(
+        db.Integer,
+        db.ForeignKey("user.id"),
+        nullable=False
+    )
+
+    signature_value = db.Column(
+        db.Text,
+        nullable=False
+    )
+
+    public_key = db.Column(
+        db.Text,
+        nullable=False
+    )
+
+    document_hash = db.Column(
+        db.String(64),
+        nullable=False
+    )
+
+    created_at = db.Column(
         db.DateTime,
         default=db.func.current_timestamp()
     )
@@ -311,6 +375,73 @@ def user_can_access_document(document):
         return False
 
     return True
+
+
+# =====================================
+# DIGITAL SIGNING KEY MANAGEMENT
+# =====================================
+
+def get_or_create_signing_keys(user):
+
+    if (
+        user.signing_private_key_encrypted
+        and user.signing_public_key
+    ):
+
+        try:
+
+            private_key_bytes = fernet.decrypt(
+                user.signing_private_key_encrypted
+            )
+
+            private_key = serialization.load_pem_private_key(
+                private_key_bytes,
+                password=None
+            )
+
+            return private_key, user.signing_public_key
+
+        except (
+            InvalidToken,
+            ValueError,
+            TypeError
+        ):
+
+            raise RuntimeError(
+                "Your stored signing key could not be opened."
+            )
+
+    # GENERATE NEW RSA KEY PAIR
+
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048
+    )
+
+    private_key_bytes = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption()
+    )
+
+    public_key_bytes = private_key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+    # ENCRYPT PRIVATE KEY BEFORE DATABASE STORAGE
+
+    encrypted_private_key = fernet.encrypt(
+        private_key_bytes
+    )
+
+    user.signing_private_key_encrypted = encrypted_private_key
+
+    user.signing_public_key = public_key_bytes.decode("utf-8")
+
+    db.session.flush()
+
+    return private_key, user.signing_public_key
 
 
 # =====================================
@@ -455,8 +586,6 @@ def login():
 
             now = datetime.utcnow()
 
-            # CHECK WHETHER ACCOUNT IS LOCKED
-
             if user.locked_until:
 
                 if user.locked_until > now:
@@ -480,12 +609,8 @@ def login():
 
                 else:
 
-                    # LOCK PERIOD HAS EXPIRED
-
                     user.locked_until = None
                     user.failed_login_attempts = 0
-
-            # CHECK PASSWORD
 
             try:
 
@@ -493,8 +618,6 @@ def login():
                     user.password_hash,
                     password
                 )
-
-                # SUCCESSFUL LOGIN
 
                 user.failed_login_attempts = 0
                 user.locked_until = None
@@ -508,8 +631,6 @@ def login():
                 return redirect(url_for("dashboard"))
 
             except VerifyMismatchError:
-
-                # INCORRECT PASSWORD
 
                 user.failed_login_attempts += 1
 
@@ -563,10 +684,23 @@ def dashboard():
         Document.uploaded_at.desc()
     ).all()
 
+    signatures_by_document = {}
+
+    for document in documents:
+
+        signatures_by_document[document.id] = (
+            DigitalSignature.query.filter_by(
+                document_id=document.id
+            ).order_by(
+                DigitalSignature.created_at.desc()
+            ).all()
+        )
+
     return render_template(
         "dashboard.html",
         user=current_user,
-        documents=documents
+        documents=documents,
+        signatures_by_document=signatures_by_document
     )
 
 
@@ -654,6 +788,265 @@ def upload():
             flash("Document upload failed.")
 
     return render_template("upload.html")
+
+
+# =====================================
+# SIGN DOCUMENT
+# =====================================
+
+@app.route(
+    "/documents/<int:document_id>/sign",
+    methods=["POST"]
+)
+@login_required
+def sign_document(document_id):
+
+    document = db.session.get(
+        Document,
+        document_id
+    )
+
+    if document is None:
+        abort(404)
+
+    if not user_can_access_document(document):
+        abort(403)
+
+    try:
+
+        # DECRYPT DOCUMENT
+
+        document_data = fernet.decrypt(
+            document.encrypted_data
+        )
+
+        # GET OR GENERATE USER SIGNING KEYS
+
+        private_key, public_key_pem = (
+            get_or_create_signing_keys(current_user)
+        )
+
+        # CREATE RSA DIGITAL SIGNATURE
+
+        signature_bytes = private_key.sign(
+            document_data,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+
+        signature_text = base64.b64encode(
+            signature_bytes
+        ).decode("utf-8")
+
+        document_hash = hashlib.sha256(
+            document_data
+        ).hexdigest()
+
+        new_signature = DigitalSignature(
+            document_id=document.id,
+            signer_id=current_user.id,
+            signature_value=signature_text,
+            public_key=public_key_pem,
+            document_hash=document_hash
+        )
+
+        db.session.add(new_signature)
+
+        db.session.flush()
+
+        record_audit(
+            action="DOCUMENT DIGITALLY SIGNED",
+            document_id=document.id,
+            details=(
+                f"Document digitally signed by "
+                f"{current_user.email}. "
+                f"Signature ID: {new_signature.id}"
+            )
+        )
+
+        db.session.commit()
+
+        flash(
+            "Digital signature created successfully."
+        )
+
+    except InvalidToken:
+
+        db.session.rollback()
+
+        flash(
+            "The document could not be decrypted for signing."
+        )
+
+    except Exception:
+
+        db.session.rollback()
+
+        app.logger.exception(
+            "Digital signing failed."
+        )
+
+        flash(
+            "Digital signing failed. Please try again."
+        )
+
+    return redirect(url_for("dashboard"))
+
+
+# =====================================
+# VERIFY DIGITAL SIGNATURE
+# =====================================
+
+@app.route(
+    "/documents/<int:document_id>/signatures/<int:signature_id>/verify",
+    methods=["POST"]
+)
+@login_required
+def verify_digital_signature(
+    document_id,
+    signature_id
+):
+
+    document = db.session.get(
+        Document,
+        document_id
+    )
+
+    if document is None:
+        abort(404)
+
+    if not user_can_access_document(document):
+        abort(403)
+
+    signature_record = db.session.get(
+        DigitalSignature,
+        signature_id
+    )
+
+    if (
+        signature_record is None
+        or signature_record.document_id != document.id
+    ):
+        abort(404)
+
+    try:
+
+        # GET CURRENT DOCUMENT CONTENT
+
+        document_data = fernet.decrypt(
+            document.encrypted_data
+        )
+
+        current_hash = hashlib.sha256(
+            document_data
+        ).hexdigest()
+
+        # LOAD PUBLIC KEY SAVED WITH SIGNATURE
+
+        public_key = serialization.load_pem_public_key(
+            signature_record.public_key.encode("utf-8")
+        )
+
+        signature_bytes = base64.b64decode(
+            signature_record.signature_value,
+            validate=True
+        )
+
+        # VERIFY SIGNATURE
+
+        public_key.verify(
+            signature_bytes,
+            document_data,
+            padding.PSS(
+                mgf=padding.MGF1(hashes.SHA256()),
+                salt_length=padding.PSS.MAX_LENGTH
+            ),
+            hashes.SHA256()
+        )
+
+        if not hmac.compare_digest(
+            signature_record.document_hash,
+            current_hash
+        ):
+
+            raise InvalidSignature()
+
+        signer = db.session.get(
+            User,
+            signature_record.signer_id
+        )
+
+        signer_email = (
+            signer.email if signer else "Unknown signer"
+        )
+
+        record_audit(
+            action="DIGITAL SIGNATURE VERIFIED",
+            document_id=document.id,
+            details=(
+                f"Signature {signature_record.id} "
+                f"verified successfully. "
+                f"Signer: {signer_email}"
+            )
+        )
+
+        db.session.commit()
+
+        flash(
+            "Digital Signature Valid: The document matches "
+            "the content signed by this account."
+        )
+
+    except InvalidSignature:
+
+        record_audit(
+            action="DIGITAL SIGNATURE VERIFICATION FAILED",
+            document_id=document.id,
+            details=(
+                f"Signature {signature_id} did not match "
+                "the current document."
+            )
+        )
+
+        db.session.commit()
+
+        flash(
+            "Digital Signature Invalid: The document may "
+            "have been changed after signing."
+        )
+
+    except (
+        InvalidToken,
+        ValueError,
+        TypeError
+    ):
+
+        db.session.rollback()
+
+        app.logger.exception(
+            "Digital signature verification error."
+        )
+
+        flash(
+            "Digital signature verification could not be completed."
+        )
+
+    except Exception:
+
+        db.session.rollback()
+
+        app.logger.exception(
+            "Digital signature verification failed."
+        )
+
+        flash(
+            "An error occurred during signature verification."
+        )
+
+    return redirect(url_for("dashboard"))
 
 
 # =====================================
@@ -1183,7 +1576,7 @@ with app.app_context():
 
     db.create_all()
 
-    # Existing document migration
+    # DOCUMENT MIGRATION
 
     document_columns = {
         column["name"]
@@ -1201,7 +1594,7 @@ with app.app_context():
                 )
             )
 
-    # Existing user table migration
+    # USER MIGRATION
 
     user_columns = {
         column["name"]
@@ -1229,6 +1622,24 @@ with app.app_context():
                 )
             )
 
+        if "signing_private_key_encrypted" not in user_columns:
+
+            connection.execute(
+                text(
+                    'ALTER TABLE "user" '
+                    "ADD COLUMN signing_private_key_encrypted BYTEA"
+                )
+            )
+
+        if "signing_public_key" not in user_columns:
+
+            connection.execute(
+                text(
+                    'ALTER TABLE "user" '
+                    "ADD COLUMN signing_public_key TEXT"
+                )
+            )
+
 
 # =====================================
 # RUN APPLICATION
@@ -1239,4 +1650,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000
-        )
+    )
