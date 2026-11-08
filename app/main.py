@@ -26,8 +26,9 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 
 from cryptography.fernet import Fernet, InvalidToken
-
-APPLICATION SETUP
+from flask import Flask 
+import os
+# APPLICATION SETUP
 
 app = Flask(name, template_folder="templates")
 
