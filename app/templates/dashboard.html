@@ -55,6 +55,10 @@
         background: #198754;
     }
 
+    .audit {
+        background: #6f42c1;
+    }
+
     .document {
         padding: 15px;
         border-bottom: 1px solid #ddd;
@@ -97,14 +101,12 @@
 
 <div class="card">
     <h2>Welcome, {{ current_user.full_name }}!</h2>
-
     <p>Email: {{ current_user.email }}</p>
     <p>Account type: {{ current_user.role }}</p>
 </div>
 
 <div class="card">
     <h2>Document Management</h2>
-
     <p>Upload and securely store your documents.</p>
 
     <a class="button" href="{{ url_for('upload') }}">
@@ -122,7 +124,6 @@
             <div class="document">
 
                 <strong>{{ document.filename }}</strong>
-
                 <br>
 
                 <span class="encrypted-badge">
@@ -160,14 +161,22 @@
         <p>You haven't uploaded any documents yet.</p>
 
     {% endif %}
+</div>
 
+<div class="card">
+    <h2>Security and Activity</h2>
+
+    <p>View records of your document activities.</p>
+
+    <a class="button audit" href="{{ url_for('audit_log') }}">
+        📋 View Audit Log
+    </a>
 </div>
 
 <div class="card">
     <h2>Account</h2>
 
-    <a class="button logout"
-       href="{{ url_for('logout') }}">
+    <a class="button logout" href="{{ url_for('logout') }}">
         Log Out
     </a>
 </div>
