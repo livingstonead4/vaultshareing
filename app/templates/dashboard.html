@@ -1,185 +1,154 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VaultShare Dashboard</title><style>
-    body {
-        font-family: Arial, sans-serif;
-        background: #f2f5fa;
-        margin: 0;
-    }
+    <title>VaultShare Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
 
-    header {
-        background: #17365d;
-        color: white;
-        padding: 20px;
-        text-align: center;
-    }
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f2f5fa;
+            margin: 0;
+            padding: 20px;
+        }
 
-    .container {
-        max-width: 750px;
-        margin: 30px auto;
-        padding: 20px;
-    }
+        header {
+            background: #17365d;
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
 
-    .card {
-        background: white;
-        padding: 25px;
-        margin-bottom: 20px;
-        border-radius: 10px;
-        box-shadow: 0 3px 10px rgba(0,0,0,0.08);
-    }
+        .container {
+            max-width: 900px;
+            margin: 25px auto;
+        }
 
-    h2 {
-        color: #17365d;
-    }
+        .card {
+            background: white;
+            padding: 20px;
+            margin-bottom: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
 
-    .button {
-        display: inline-block;
-        background: #17365d;
-        color: white;
-        padding: 12px 20px;
-        border-radius: 6px;
-        text-decoration: none;
-        margin-top: 10px;
-        border: none;
-        cursor: pointer;
-        font-size: 14px;
-    }
+        .button {
+            display: inline-block;
+            padding: 10px 15px;
+            margin: 5px 3px;
+            background: #155eef;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            border: none;
+            cursor: pointer;
+        }
 
-    .logout {
-        background: #b00020;
-    }
+        .green {
+            background: #198754;
+        }
 
-    .verify {
-        background: #198754;
-    }
+        .red {
+            background: #dc3545;
+        }
 
-    .audit {
-        background: #6f42c1;
-    }
+        .badge {
+            color: green;
+            font-weight: bold;
+        }
 
-    .document {
-        padding: 15px;
-        border-bottom: 1px solid #ddd;
-    }
+        input[type="submit"] {
+            cursor: pointer;
+        }
+    </style>
+</head>
 
-    .encrypted-badge {
-        display: inline-block;
-        background: #d4edda;
-        color: #155724;
-        padding: 6px 10px;
-        border-radius: 5px;
-        font-size: 13px;
-        font-weight: bold;
-        margin-top: 8px;
-    }
+<body>
 
-    .download-link {
-        display: inline-block;
-        margin-top: 10px;
-        color: #17365d;
-        font-weight: bold;
-    }
+<header>
+    <h2>VaultShare Dashboard</h2>
+    <p>Welcome, {{ user.full_name }}!</p>
+    <p>{{ user.email }}</p>
+</header>
 
-    .message {
-        background: #e8f4fd;
-        padding: 12px;
-        border-radius: 6px;
-        margin-bottom: 12px;
-    }
-</style>
+<div class="container">
 
-</head><body><header>
-    <h1>VaultShare</h1>
-    <p>Secure Document Sharing and Verification</p>
-</header><div class="container">{% with messages = get_flashed_messages() %}
-    {% for message in messages %}
-        <div class="message">{{ message }}</div>
-    {% endfor %}
-{% endwith %}
+    <div class="card">
+        <h3>Document Management</h3>
 
-<div class="card">
-    <h2>Welcome, {{ current_user.full_name }}!</h2>
-    <p>Email: {{ current_user.email }}</p>
-    <p>Account type: {{ current_user.role }}</p>
+        <a class="button" href="{{ url_for('upload') }}">
+            Upload New Document
+        </a>
+
+        <a class="button green" href="{{ url_for('shared_with_me') }}">
+            Documents Shared With Me
+        </a>
+
+        <a class="button" href="{{ url_for('audit_log') }}">
+            View Audit Log
+        </a>
+    </div>
+
+    <div class="card">
+        <h3>My Documents</h3>
+
+        {% if documents %}
+
+            {% for document in documents %}
+
+                <div class="card">
+                    <h4>{{ document.filename }}</h4>
+
+                    <p>
+                        <span class="badge">🔒 Encrypted</span>
+                    </p>
+
+                    <p>
+                        Uploaded:
+                        {{ document.uploaded_at }}
+                    </p>
+
+                    <a class="button"
+                       href="{{ url_for('download_document', document_id=document.id) }}">
+                        Download
+                    </a>
+
+                    <a class="button green"
+                       href="{{ url_for('share_document', document_id=document.id) }}">
+                        Share Document
+                    </a>
+
+                    <form method="POST"
+                          action="{{ url_for('verify_document', document_id=document.id) }}">
+
+                        <input type="hidden"
+                               name="csrf_token"
+                               value="{{ csrf_token() }}">
+
+                        <button class="button" type="submit">
+                            Verify Document
+                        </button>
+
+                    </form>
+
+                </div>
+
+            {% endfor %}
+
+        {% else %}
+
+            <p>You have not uploaded any documents yet.</p>
+
+        {% endif %}
+    </div>
+
+    <div class="card">
+        <a class="button red" href="{{ url_for('logout') }}">
+            Logout
+        </a>
+    </div>
+
 </div>
 
-<div class="card">
-    <h2>Document Management</h2>
-    <p>Upload and securely store your documents.</p>
-
-    <a class="button" href="{{ url_for('upload') }}">
-        Upload Document
-    </a>
-</div>
-
-<div class="card">
-    <h2>My Documents</h2>
-
-    {% if documents %}
-
-        {% for document in documents %}
-
-            <div class="document">
-
-                <strong>{{ document.filename }}</strong>
-                <br>
-
-                <span class="encrypted-badge">
-                    🔒 Encrypted
-                </span>
-
-                <br>
-
-                <a class="download-link"
-                   href="{{ url_for('download_document', document_id=document.id) }}">
-                    Download Document
-                </a>
-
-                <br>
-
-                <form method="POST"
-                      action="{{ url_for('verify_document', document_id=document.id) }}">
-
-                    <input type="hidden"
-                           name="csrf_token"
-                           value="{{ csrf_token() }}">
-
-                    <button type="submit" class="button verify">
-                        🔍 Verify Document
-                    </button>
-
-                </form>
-
-            </div>
-
-        {% endfor %}
-
-    {% else %}
-
-        <p>You haven't uploaded any documents yet.</p>
-
-    {% endif %}
-</div>
-
-<div class="card">
-    <h2>Security and Activity</h2>
-
-    <p>View records of your document activities.</p>
-
-    <a class="button audit" href="{{ url_for('audit_log') }}">
-        📋 View Audit Log
-    </a>
-</div>
-
-<div class="card">
-    <h2>Account</h2>
-
-    <a class="button logout" href="{{ url_for('logout') }}">
-        Log Out
-    </a>
-</div>
-
-</div></body>
+</body>
 </html>
