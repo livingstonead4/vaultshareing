@@ -562,7 +562,7 @@ def upload():
 
 
 # =====================================
-# SHARE DOCUMENT
+# SHARE DOCUMENT AND MANAGE ACCESS
 # =====================================
 
 @app.route(
@@ -600,15 +600,17 @@ def share_document(document_id):
 
         if not recipient:
             flash("No active registered user was found with that email.")
-            return redirect(
-                url_for("share_document", document_id=document.id)
-            )
+            return redirect(url_for(
+                "share_document",
+                document_id=document.id
+            ))
 
         if recipient.id == current_user.id:
             flash("You cannot share a document with yourself.")
-            return redirect(
-                url_for("share_document", document_id=document.id)
-            )
+            return redirect(url_for(
+                "share_document",
+                document_id=document.id
+            ))
 
         expiry_date = None
 
@@ -628,16 +630,18 @@ def share_document(document_id):
 
                 if expiry_date <= datetime.utcnow():
                     flash("The expiry date must be in the future.")
-                    return redirect(
-                        url_for("share_document", document_id=document.id)
-                    )
+                    return redirect(url_for(
+                        "share_document",
+                        document_id=document.id
+                    ))
 
             except ValueError:
 
                 flash("Invalid expiry date.")
-                return redirect(
-                    url_for("share_document", document_id=document.id)
-                )
+                return redirect(url_for(
+                    "share_document",
+                    document_id=document.id
+                ))
 
         existing_share = DocumentShare.query.filter_by(
             document_id=document.id,
@@ -654,6 +658,7 @@ def share_document(document_id):
                 existing_share.is_active = False
 
             else:
+
                 existing_share.expires_at = expiry_date
 
                 record_audit(
@@ -666,7 +671,10 @@ def share_document(document_id):
 
                 flash("Existing sharing permission updated.")
 
-                return redirect(url_for("dashboard"))
+                return redirect(url_for(
+                    "share_document",
+                    document_id=document.id
+                ))
 
         new_share = DocumentShare(
             document_id=document.id,
@@ -676,7 +684,6 @@ def share_document(document_id):
         )
 
         db.session.add(new_share)
-
         db.session.flush()
 
         record_audit(
@@ -700,7 +707,10 @@ def share_document(document_id):
 
             flash("Document shared successfully.")
 
-            return redirect(url_for("dashboard"))
+            return redirect(url_for(
+                "share_document",
+                document_id=document.id
+            ))
 
         except Exception:
 
@@ -710,9 +720,28 @@ def share_document(document_id):
 
             flash("Document sharing failed.")
 
+    active_shares = DocumentShare.query.filter_by(
+        document_id=document.id,
+        sender_id=current_user.id,
+        is_active=True
+    ).all()
+
+    shared_access = []
+
+    for share in active_shares:
+
+        recipient = db.session.get(
+            User,
+            share.recipient_id
+        )
+
+        if recipient:
+            shared_access.append((share, recipient))
+
     return render_template(
         "share.html",
-        document=document
+        document=document,
+        shared_access=shared_access
     )
 
 
@@ -737,9 +766,28 @@ def shared_with_me():
         DocumentShare.created_at.desc()
     ).all()
 
+    shared_items = []
+
+    for share in shares:
+
+        document = db.session.get(
+            Document,
+            share.document_id
+        )
+
+        sender = db.session.get(
+            User,
+            share.sender_id
+        )
+
+        if document and sender:
+            shared_items.append(
+                (share, document, sender)
+            )
+
     return render_template(
         "shared_documents.html",
-        shares=shares
+        shared_items=shared_items
     )
 
 
@@ -775,7 +823,10 @@ def revoke_share(share_id):
 
     if not share.is_active:
         flash("This sharing permission is already inactive.")
-        return redirect(url_for("dashboard"))
+        return redirect(url_for(
+            "share_document",
+            document_id=document.id
+        ))
 
     share.is_active = False
 
@@ -817,7 +868,10 @@ def revoke_share(share_id):
 
         flash("Could not revoke access. Please try again.")
 
-    return redirect(url_for("dashboard"))
+    return redirect(url_for(
+        "share_document",
+        document_id=document.id
+    ))
 
 
 # =====================================
