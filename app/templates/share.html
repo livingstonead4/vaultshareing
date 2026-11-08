@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Share Document - VaultShare</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f4f6f9;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: 40px auto;
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        input, button {
+            width: 100%;
+            padding: 12px;
+            margin-top: 12px;
+            box-sizing: border-box;
+        }
+
+        button {
+            background: #155eef;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        a {
+            display: inline-block;
+            margin-top: 18px;
+            color: #155eef;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Share Document</h2>
+
+    <p><strong>Document:</strong> {{ document.filename }}</p>
+
+    <form method="POST">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+        <label>Recipient's registered email address</label>
+        <input
+            type="email"
+            name="recipient_email"
+            placeholder="Enter recipient email"
+            required
+        >
+
+        <label>Access expiry date (optional)</label>
+        <input type="date" name="expiry_date">
+
+        <button type="submit">Share Document</button>
+    </form>
+
+    <a href="{{ url_for('dashboard') }}">Back to Dashboard</a>
+</div>
+
+</body>
+</html>
