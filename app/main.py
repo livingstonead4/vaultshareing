@@ -157,8 +157,6 @@ class User(UserMixin, db.Model):
         nullable=True
     )
 
-    # DIGITAL SIGNING KEYS
-
     signing_private_key_encrypted = db.Column(
         db.LargeBinary,
         nullable=True
@@ -411,8 +409,6 @@ def get_or_create_signing_keys(user):
                 "Your stored signing key could not be opened."
             )
 
-    # GENERATE NEW RSA KEY PAIR
-
     private_key = rsa.generate_private_key(
         public_exponent=65537,
         key_size=2048
@@ -428,8 +424,6 @@ def get_or_create_signing_keys(user):
         encoding=serialization.Encoding.PEM,
         format=serialization.PublicFormat.SubjectPublicKeyInfo
     )
-
-    # ENCRYPT PRIVATE KEY BEFORE DATABASE STORAGE
 
     encrypted_private_key = fernet.encrypt(
         private_key_bytes
@@ -464,7 +458,7 @@ def home():
     if current_user.is_authenticated:
         return redirect(url_for("dashboard"))
 
-    return redirect(url_for("register"))
+    return redirect(url_for("login"))
 
 
 # =====================================
@@ -814,19 +808,13 @@ def sign_document(document_id):
 
     try:
 
-        # DECRYPT DOCUMENT
-
         document_data = fernet.decrypt(
             document.encrypted_data
         )
 
-        # GET OR GENERATE USER SIGNING KEYS
-
         private_key, public_key_pem = (
             get_or_create_signing_keys(current_user)
         )
-
-        # CREATE RSA DIGITAL SIGNATURE
 
         signature_bytes = private_key.sign(
             document_data,
@@ -934,8 +922,6 @@ def verify_digital_signature(
 
     try:
 
-        # GET CURRENT DOCUMENT CONTENT
-
         document_data = fernet.decrypt(
             document.encrypted_data
         )
@@ -943,8 +929,6 @@ def verify_digital_signature(
         current_hash = hashlib.sha256(
             document_data
         ).hexdigest()
-
-        # LOAD PUBLIC KEY SAVED WITH SIGNATURE
 
         public_key = serialization.load_pem_public_key(
             signature_record.public_key.encode("utf-8")
@@ -954,8 +938,6 @@ def verify_digital_signature(
             signature_record.signature_value,
             validate=True
         )
-
-        # VERIFY SIGNATURE
 
         public_key.verify(
             signature_bytes,
@@ -1650,4 +1632,4 @@ if __name__ == "__main__":
     app.run(
         host="0.0.0.0",
         port=5000
-    )
+        )
